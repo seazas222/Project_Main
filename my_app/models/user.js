@@ -2,8 +2,6 @@ const pool = require('../libs/db_pool');
 
 module.exports = {
 
-    // GET ALL USERS
-
     getAllUsers: async () => {
 
         let conn;
@@ -20,7 +18,9 @@ module.exports = {
                     phone,
                     email,
                     role_id,
-                    user_image
+                    user_image,
+                    is_active,
+                    is_deleted
                 FROM \`user\`
             `;
 
@@ -49,9 +49,6 @@ module.exports = {
         }
     },
 
-
-    // GET USER BY USERNAME
-
     getUserByUsername: async (username) => {
 
         let conn;
@@ -69,7 +66,9 @@ module.exports = {
                     phone,
                     email,
                     role_id,
-                    user_image
+                    user_image,
+                    is_active,
+                    is_deleted
                 FROM \`user\`
                 WHERE username = ?
                 LIMIT 1
@@ -100,8 +99,13 @@ module.exports = {
         }
     },
 
-
-    // GET USER BY ID
+    getUserByPhone: async (phone) => {
+        const [rows] = await pool.query(
+            'SELECT user_id FROM `user` WHERE phone = ? LIMIT 1',
+            [phone]
+        );
+        return rows[0] || null;
+    },
 
     getUserById: async (userId) => {
 
@@ -119,7 +123,9 @@ module.exports = {
                     phone,
                     email,
                     role_id,
-                    user_image
+                    user_image,
+                    is_active,
+                    is_deleted
                 FROM \`user\`
                 WHERE user_id = ?
                 LIMIT 1
@@ -149,9 +155,6 @@ module.exports = {
 
         }
     },
-
-
-    // CREATE USER
 
     createUser: async (userData) => {
 
@@ -201,12 +204,7 @@ module.exports = {
         }
     },
 
-
-    // UPDATE USER
-
-    // UPDATE USER
-
-updateUser: async (userId, userData) => {
+    updateUser: async (userId, userData) => {
 
     let conn;
 
@@ -217,6 +215,7 @@ updateUser: async (userId, userData) => {
         const sql = `
             UPDATE \`user\`
             SET
+                username = ?,
                 fullname = ?,
                 phone = ?,
                 email = ?
@@ -226,6 +225,7 @@ updateUser: async (userId, userData) => {
         await conn.query(
             sql,
             [
+                userData.username,
                 userData.fullname,
                 userData.phone || null,
                 userData.email || null,
@@ -254,6 +254,43 @@ updateUser: async (userId, userData) => {
 
     }
 },
-    
+
+    updateProfileImage: async (userId, imageName) => {
+        const [result] = await pool.query(
+            'UPDATE `user` SET user_image = ? WHERE user_id = ?',
+            [imageName, userId]
+        );
+        return result.affectedRows > 0;
+    },
+
+setAccountActive: async (userId, isActive) => {
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        await conn.query('UPDATE `user` SET is_active = ? WHERE user_id = ?', [isActive ? 1 : 0, userId]);
+        return { isError: false };
+    } finally {
+        if (conn) conn.release();
+    }
+},
+
+setPasswordHash: async (userId, passwordHash) => {
+    const [result] = await pool.query(
+        'UPDATE `user` SET password = ? WHERE user_id = ? AND role_id = 2 AND is_deleted = 0',
+        [passwordHash, userId]
+    );
+    return result.affectedRows > 0;
+},
+
+deleteCustomerAccount: async ({ userId, archivedUsername, passwordHash }) => {
+    const [result] = await pool.query(
+        `UPDATE \`user\`
+         SET username = ?, password = ?, fullname = 'บัญชีที่ลบแล้ว',
+             phone = NULL, email = NULL, is_active = 0, is_deleted = 1
+         WHERE user_id = ? AND role_id = 2 AND is_deleted = 0`,
+        [archivedUsername, passwordHash, userId]
+    );
+    return result.affectedRows > 0;
+},
 
 };

@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
+
 import '../core/app_theme.dart';
+import '../services/api_service.dart';
 import '../services/cart_service.dart';
+import '../services/current_user_service.dart';
 import '../widgets/app_buttons.dart';
 import 'home_shell.dart';
 
 class PaymentPage extends StatefulWidget {
   final double amount;
+  final int? reservationId;
   final String? reservationTable;
+  final int? tableId;
 
   const PaymentPage({
     super.key,
     required this.amount,
+    this.reservationId,
     this.reservationTable,
+    this.tableId,
   });
 
   @override
@@ -19,145 +26,217 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
-  String method = 'PromptPay';
+  bool _isSaving = false;
+
+  int _spicyId(String value) {
+    switch (value) {
+      case 'ไม่เผ็ด':
+        return 1;
+      case 'เผ็ดน้อย':
+        return 2;
+      case 'เผ็ดปกติ':
+      case 'เผ็ดกลาง':
+        return 3;
+      case 'เผ็ดมาก':
+        return 4;
+      default:
+        return 1;
+    }
+  }
+
+  int _servingId(String value) {
+    return value == 'กลับบ้าน' ? 2 : 1;
+  }
+
+  int _riceId(String value) {
+    switch (value) {
+      case 'พิเศษ +10':
+        return 2;
+      case 'พิเศษ +20':
+        return 3;
+      default:
+        return 1;
+    }
+  }
+
+  int _eggId(String value) {
+    switch (value) {
+      case 'ไข่ดาว +10':
+        return 2;
+      case 'ไข่เจียว +15':
+        return 3;
+      default:
+        return 1;
+    }
+  }
+
+  Future<void> _confirmPayment() async {
+    if (_isSaving) return;
+
+    final cart = CartService.instance;
+    final user = CurrentUserService.instance.user;
+
+    if (user == null) {
+      _showError('กรุณาเข้าสู่ระบบก่อน');
+      return;
+    }
+
+    if (cart.items.isEmpty) {
+      _showError('ยังไม่มีรายการอาหารในตะกร้า');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    int? createdOrderId;
+    try {
+
+      final orderId = await ApiService.createOrder(
+        reservationId: widget.reservationId,
+        tableId: widget.tableId,
+      );
+      createdOrderId = orderId;
+
+      for (final item in cart.items) {
+        final menuId = int.tryParse(item.food.id);
+
+        if (menuId == null) {
+          throw Exception(
+            'menu_id ของ ${item.food.name} ไม่ถูกต้อง',
+          );
+        }
+
+        await ApiService.createOrderDetail(
+          orderId: orderId,
+          menuId: menuId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          spicyId: _spicyId(item.spicy),
+          servingId: _servingId(item.serving),
+          riceId: _riceId(item.size),
+          eggId: _eggId(item.egg),
+          selectedOptions: item.selectedOptions,
+          note: item.note.trim().isEmpty
+              ? null
+              : item.note.trim(),
+        );
+      }
+
+      if (!mounted) return;
+
+      final table = widget.reservationTable ?? (widget.tableId == null ? '-' : 'โต๊ะหน้าร้าน');
+      final amount = cart.subtotal;
+
+      cart.clear();
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ConfirmationPage(
+            table: table,
+            amount: amount,
+            orderId: orderId,
+            hasOrder: true,
+          ),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      if (createdOrderId != null) {
+        try {
+          await ApiService.cancelOrder(createdOrderId);
+        } catch (_) {
+          // Keep the original order creation error visible; the order may
+          // already have progressed on the restaurant side.
+        }
+      }
+
+      setState(() {
+        _isSaving = false;
+      });
+
+      _showError(
+        e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cart = CartService.instance;
+    final displayAmount = cart.items.isEmpty
+        ? widget.amount
+        : cart.subtotal;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Payment'),
+        title: const Text('ยืนยันรายการอาหาร'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(14),
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
               children: [
-                _row(
-                  'Reservation table',
-                  widget.reservationTable ?? 'T004',
+        _row(
+          'โต๊ะ',
+                  widget.reservationTable ?? (widget.tableId == null ? '-' : 'โต๊ะหน้าร้าน'),
                 ),
                 const Divider(height: 22),
                 _row(
-                  'Amount',
-                  '฿${widget.amount.toStringAsFixed(2)}',
+                  'ยอดค่าอาหาร',
+                  '฿${displayAmount.toStringAsFixed(2)}',
                 ),
                 const Divider(height: 22),
                 _row(
-                  'Status',
-                  'Pending',
+                  'สถานะ',
+                  'รอรับออร์เดอร์',
                   valueColor: AppColors.orange,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          const Text(
-            'Payment method',
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w600,
+
+          const SizedBox(height: 24),
+
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.qr_code_2, color: AppColors.orange),
+              title: Text('ชำระหลังอาหารทำเสร็จ'),
+              subtitle: Text('ระบบจะแจ้งเตือนและแสดง QR PromptPay พร้อมยอดและรายการอาหาร'),
             ),
           ),
-          const SizedBox(height: 12),
-          _method(
-            icon: Icons.qr_code_2,
-            title: 'PromptPay',
-            subtitle: 'Scan QR to pay',
-            value: 'PromptPay',
-          ),
-          const SizedBox(height: 10),
-          _method(
-            icon: Icons.payments_outlined,
-            title: 'Cash at restaurant',
-            subtitle: 'Pay when you arrive',
-            value: 'Cash',
-          ),
-          const SizedBox(height: 25),
+
+          const SizedBox(height: 28),
+
           PrimaryButton(
-            text: 'Confirm Payment',
-            onPressed: () {
-              CartService.instance.clear();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ConfirmationPage(
-                    table: widget.reservationTable ?? 'T004',
-                    amount: widget.amount,
-                  ),
-                ),
-                (route) => false,
-              );
-            },
+            text: _isSaving
+                ? 'กำลังบันทึก...'
+                : 'ยืนยันการสั่งอาหาร',
+            onPressed: _isSaving ? null : _confirmPayment,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _method({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String value,
-  }) {
-    final selected = method == value;
-    return InkWell(
-      onTap: () => setState(() => method = value),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected
-                ? AppColors.orange
-                : AppColors.border,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: AppColors.orange, size: 30),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.grey,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_off,
-              color: selected
-                  ? AppColors.orange
-                  : Colors.grey,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -174,14 +253,14 @@ class _PaymentPageState extends State<PaymentPage> {
           label,
           style: const TextStyle(
             color: AppColors.grey,
-            fontSize: 12,
+            fontSize: 13,
           ),
         ),
         Text(
           value,
           style: TextStyle(
             color: valueColor,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -192,11 +271,15 @@ class _PaymentPageState extends State<PaymentPage> {
 class ConfirmationPage extends StatelessWidget {
   final String table;
   final double amount;
+  final int orderId;
+  final bool hasOrder;
 
   const ConfirmationPage({
     super.key,
     required this.table,
     required this.amount,
+    this.orderId = 0,
+    this.hasOrder = true,
   });
 
   @override
@@ -223,24 +306,34 @@ class ConfirmationPage extends StatelessWidget {
                     size: 55,
                   ),
                 ),
+
                 const SizedBox(height: 22),
-                const Text(
-                  'Booking Confirmed!',
-                  style: TextStyle(
+
+                Text(
+                  hasOrder
+                      ? 'รับออร์เดอร์แล้ว!'
+                      : 'จองโต๊ะสำเร็จ!',
+                  style: const TextStyle(
                     fontSize: 27,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+
                 const SizedBox(height: 8),
-                const Text(
-                  'Your table has been reserved successfully.',
+
+                Text(
+                  hasOrder
+                      ? 'ร้านได้รับรายการอาหารแล้ว จะแจ้งเมื่ออาหารทำเสร็จ'
+                      : 'โต๊ะของคุณถูกจองเรียบร้อยแล้ว',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.grey,
                     fontSize: 13,
                   ),
                 ),
+
                 const SizedBox(height: 25),
+
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(18),
@@ -250,18 +343,31 @@ class ConfirmationPage extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      _line('Table', table),
+                      _line('โต๊ะ', table),
+
+                      if (hasOrder)
+                        _line(
+                          'Order ID',
+                          '#$orderId',
+                        ),
+
                       _line(
-                        'Amount',
+                        'ยอดค่าอาหาร',
                         '฿${amount.toStringAsFixed(2)}',
                       ),
-                      _line('Status', 'Paid'),
+
+                      _line(
+                        'สถานะ',
+                        hasOrder ? 'รอรับออร์เดอร์' : 'จองแล้ว',
+                      ),
                     ],
                   ),
                 ),
+
                 const SizedBox(height: 25),
+
                 PrimaryButton(
-                  text: 'Back to Home',
+                  text: 'กลับหน้าหลัก',
                   onPressed: () => Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(
@@ -278,20 +384,29 @@ class ConfirmationPage extends StatelessWidget {
     );
   }
 
-  Widget _line(String label, String value) {
+  Widget _line(
+    String label,
+    String value,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.grey)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.grey,
+            ),
+          ),
           Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
     );
   }
 }
-

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/app_theme.dart';
 import '../widgets/app_buttons.dart';
 import '../services/api_service.dart';
+import '../services/current_user_service.dart';
+import '../services/notification_service.dart';
+import '../models/user.dart' as app_user;
+import 'home_shell.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -16,6 +21,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final phone = TextEditingController();
   final password = TextEditingController();
   final confirm = TextEditingController();
+  final email = TextEditingController();
 
   bool hidePassword = true;
   bool hideConfirm = true;
@@ -28,6 +34,7 @@ class _SignUpPageState extends State<SignUpPage> {
     phone.dispose();
     password.dispose();
     confirm.dispose();
+    email.dispose();
     super.dispose();
   }
 
@@ -54,6 +61,24 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
+    if (username.text.trim().length < 3 || password.text.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Username ต้องมีอย่างน้อย 3 ตัว และรหัสผ่านอย่างน้อย 8 ตัว')),
+      );
+      return;
+    }
+
+    if (phone.text.trim().length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลัก')),
+      );
+      return;
+    }
+
+    await _completeSignUp();
+  }
+
+  Future<void> _completeSignUp() async {
     setState(() {
       loading = true;
     });
@@ -64,6 +89,7 @@ class _SignUpPageState extends State<SignUpPage> {
         fullname: name.text.trim(),
         phone: phone.text.trim(),
         password: password.text,
+        email: email.text.trim().isEmpty ? null : email.text.trim(),
       );
 
       if (!mounted) return;
@@ -72,19 +98,17 @@ class _SignUpPageState extends State<SignUpPage> {
         loading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result['message'] ?? 'สมัครสมาชิกสำเร็จ',
-          ),
-        ),
+      final newUser = app_user.User.fromJson(
+        Map<String, dynamic>.from(result['data'] as Map),
       );
-
-      Future.delayed(const Duration(milliseconds: 700), () {
-        if (mounted) {
-          Navigator.pop(context);
-        }
-      });
+      CurrentUserService.instance.setUser(newUser);
+      await NotificationService.registerCurrentDevice();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeShell()),
+        (_) => false,
+      );
     } catch (e) {
       if (!mounted) return;
 
@@ -152,9 +176,22 @@ class _SignUpPageState extends State<SignUpPage> {
 
                 TextField(
                   controller: phone,
-                  keyboardType: TextInputType.phone,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 10,
                   decoration: const InputDecoration(
                     hintText: 'เบอร์โทรศัพท์',
+                    counterText: '',
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                TextField(
+                  controller: email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    hintText: 'อีเมล (ไม่บังคับ)',
                   ),
                 ),
 
@@ -205,34 +242,8 @@ class _SignUpPageState extends State<SignUpPage> {
                 const SizedBox(height: 30),
 
                 PrimaryButton(
-                  text: loading ? 'Creating...' : 'Create account',
+                  text: loading ? 'กำลังสมัครสมาชิก...' : 'สมัครสมาชิก',
                   onPressed: loading ? null : _signUp,
-                ),
-
-                const SizedBox(height: 20),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: loading ? null : () {},
-                    icon: Image.asset(
-                      'assets/google_icon.webp',
-                      width: 20,
-                      height: 20,
-                    ),
-                    label: const Text('Continue with Google'),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      side: const BorderSide(
-                        color: AppColors.border,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),

@@ -6,6 +6,8 @@ class User {
   final String? email;
   final int? roleId;
   final String? userImage;
+  final String? authToken;
+  final bool isActive;
 
   const User({
     required this.userId,
@@ -15,6 +17,8 @@ class User {
     this.email,
     this.roleId,
     this.userImage,
+    this.authToken,
+    this.isActive = true,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -26,6 +30,10 @@ class User {
       email: json['email'],
       roleId: json['role_id'],
       userImage: json['user_image'],
+      authToken: json['token'] ?? json['auth_token'],
+      isActive: json['is_active'] == null ||
+          json['is_active'] == true ||
+          json['is_active'].toString() == '1',
     );
   }
 }

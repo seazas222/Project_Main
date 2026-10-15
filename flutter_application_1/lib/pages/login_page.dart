@@ -3,8 +3,10 @@ import '../core/app_theme.dart';
 import '../widgets/app_buttons.dart';
 import '../services/api_service.dart';
 import '../services/current_user_service.dart';
+import '../services/notification_service.dart';
 import 'signup_page.dart';
 import 'home_shell.dart';
+import 'admin_dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,6 +20,7 @@ class _LoginPageState extends State<LoginPage> {
   final password = TextEditingController();
 
   bool hide = true;
+  bool loading = false;
 
   @override
   void dispose() {
@@ -27,6 +30,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
+    if (loading) return;
     if (username.text.trim().isEmpty || password.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('กรุณากรอก Username และ Password')),
@@ -34,6 +38,7 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    setState(() => loading = true);
     try {
       final user = await ApiService.login(
         username: username.text.trim(),
@@ -41,10 +46,11 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       CurrentUserService.instance.setUser(user);
-
-      debugPrint('LOGIN USER => id=${user.userId}, username=${user.username}');
+      await NotificationService.registerCurrentDevice();
 
       if (!mounted) return;
+
+      setState(() => loading = false);
 
       ScaffoldMessenger.of(
         context,
@@ -52,11 +58,17 @@ class _LoginPageState extends State<LoginPage> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const HomeShell()),
+        MaterialPageRoute(
+          builder: (_) => user.roleId == 1
+              ? const AdminDashboardPage()
+              : const HomeShell(),
+        ),
         (_) => false,
       );
     } catch (e) {
       if (!mounted) return;
+
+      setState(() => loading = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
@@ -136,58 +148,9 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 28),
 
-                PrimaryButton(text: 'Log in', onPressed: _login),
-
-                const SizedBox(height: 22),
-
-                Center(
-                  child: TextButton(
-                    onPressed: () {},
-                    child: const Text(
-                      'Forgot password?',
-                      style: TextStyle(color: AppColors.orange, fontSize: 12),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'OR',
-                        style: TextStyle(color: Colors.grey, fontSize: 11),
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: Image.asset(
-                      'assets/google_icon.webp',
-                      width: 20,
-                      height: 20,
-                    ),
-                    label: const Text('Log in with Google'),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      side: const BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
+                PrimaryButton(
+                  text: loading ? 'กำลังเข้าสู่ระบบ...' : 'Log in',
+                  onPressed: loading ? null : _login,
                 ),
 
                 const SizedBox(height: 22),

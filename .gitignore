@@ -3,6 +3,13 @@ my_app/node_modules/
 
 .env
 *.env
+my_app/firebase-service-account.json
+my_app/storage/payment_slips/
+my_app/storage/menu_catalog_backups/
+my_app/storage/
+.idea/
+output/
+tmp/
 
 build/
 .dart_tool/

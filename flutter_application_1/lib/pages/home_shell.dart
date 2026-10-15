@@ -15,19 +15,17 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int index = 0;
 
-  final pages = const [
-    HomePage(),
-    FoodMenuPage(),
-    BookingPage(),
-    ProfilePage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: index,
-        children: pages,
+        children: [
+          const HomePage(),
+          const FoodMenuPage(),
+          BookingPage(isActive: index == 2),
+          const ProfilePage(),
+        ],
       ),
       bottomNavigationBar: AppBottomNav(
         currentIndex: index,

@@ -33,7 +33,7 @@ class _ReservationHistoryPageState
     }
 
     _reservationsFuture =
-        ApiService.getReservationsByUserId(user.userId);
+        ApiService.getCompletedReservationsByUserId(user.userId);
   }
 
   Future<void> _refresh() async {
@@ -58,7 +58,7 @@ class _ReservationHistoryPageState
           icon: const Icon(Icons.arrow_back),
         ),
         title: const Text(
-          'Booking history',
+          'ประวัติการจองโต๊ะ',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -142,7 +142,7 @@ class _ReservationHistoryPageState
                   SizedBox(height: 10),
                   Center(
                     child: Text(
-                      'เมื่อคุณทำการจอง รายการจะแสดงที่นี่',
+                      'รายการจองทั้งหมดพร้อมวันเวลาที่จองและผลการจองจะแสดงที่นี่',
                       style: TextStyle(
                         color: AppColors.grey,
                         fontSize: 11,
@@ -236,7 +236,7 @@ class _ReservationHistoryPageState
                         CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Reservation #${reservation.reservationId}',
+                        'รายการจอง #${reservation.reservationId}',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -244,7 +244,7 @@ class _ReservationHistoryPageState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Table ${reservation.tableId}',
+                        'โต๊ะ ${reservation.tableNumber ?? reservation.tableId}',
                         style: const TextStyle(
                           color: AppColors.grey,
                           fontSize: 12,
@@ -263,46 +263,33 @@ class _ReservationHistoryPageState
             const SizedBox(height: 12),
             _detailRow(
               Icons.calendar_today_outlined,
-              'Date',
-              reservation.diningDate,
+              'วันและเวลาที่จอง',
+              _dateTime(reservation.bookingDate),
             ),
             const SizedBox(height: 8),
             _detailRow(
               Icons.access_time_outlined,
-              'Time',
-              reservation.diningTime,
+              'วันที่เข้ารับบริการ',
+              _dateOnly(reservation.diningDate),
             ),
+            const SizedBox(height: 8),
+            _detailRow(Icons.access_time_outlined, 'เวลา', reservation.diningTime),
             const SizedBox(height: 8),
             _detailRow(
               Icons.people_outline,
-              'Guests',
-              '${reservation.guests} persons',
-            ),
-            const SizedBox(height: 10),
-            const Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.end,
-              children: [
-                Text(
-                  'View details',
-                  style: TextStyle(
-                    color: AppColors.orange,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                SizedBox(width: 4),
-                Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: AppColors.orange,
-                ),
-              ],
+              'จำนวนผู้จอง',
+              '${reservation.guests} คน',
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _dateOnly(String value) => value.length >= 10 ? value.substring(0, 10) : value;
+  String _dateTime(String value) {
+    final normalized = value.replaceFirst('T', ' ');
+    return normalized.length >= 16 ? normalized.substring(0, 16) : normalized;
   }
 
   Widget _detailRow(
@@ -342,19 +329,19 @@ class _ReservationHistoryPageState
 
     switch (statusId) {
       case 1:
-        text = 'Pending';
+        text = 'ยืนยันแล้ว';
         break;
       case 2:
-        text = 'Confirmed';
+        text = 'ยกเลิกแล้ว';
         break;
       case 3:
-        text = 'Cancelled';
+        text = 'มาใช้บริการแล้ว';
         break;
       case 4:
-        text = 'Completed';
+        text = 'รอยืนยัน';
         break;
       default:
-        text = 'Unknown';
+        text = 'สถานะอื่น ($statusId)';
     }
 
     return Container(
@@ -379,13 +366,13 @@ class _ReservationHistoryPageState
   Color _statusColor(int statusId) {
     switch (statusId) {
       case 1:
-        return const Color(0xFFFFF3CD);
-      case 2:
         return const Color(0xFFE7F7EF);
-      case 3:
+      case 2:
         return const Color(0xFFFDECEC);
-      case 4:
+      case 3:
         return const Color(0xFFE8EEF9);
+      case 4:
+        return const Color(0xFFFFF3CD);
       default:
         return const Color(0xFFEDEDED);
     }

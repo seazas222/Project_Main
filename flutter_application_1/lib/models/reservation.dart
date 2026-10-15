@@ -7,6 +7,8 @@ class Reservation {
   final String diningTime;
   final int guests;
   final int statusReservationId;
+  final String? statusReservationName;
+  final int? tableNumber;
 
   const Reservation({
     required this.reservationId,
@@ -17,6 +19,8 @@ class Reservation {
     required this.diningTime,
     required this.guests,
     required this.statusReservationId,
+    this.statusReservationName,
+    this.tableNumber,
   });
 
   factory Reservation.fromJson(Map<String, dynamic> json) {
@@ -30,6 +34,8 @@ class Reservation {
       guests: json['guests'] ?? 0,
       statusReservationId:
           json['statusreservation_id'] ?? 0,
+      statusReservationName: json['statusreservation_name']?.toString(),
+      tableNumber: int.tryParse(json['table_number']?.toString() ?? ''),
     );
   }
 }

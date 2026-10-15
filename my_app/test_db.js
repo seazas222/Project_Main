@@ -20,6 +20,7 @@ async function testDatabase() {
 
         console.error('เชื่อมต่อ Database ไม่สำเร็จ');
         console.error(error);
+        process.exitCode = 1;
 
     } finally {
 

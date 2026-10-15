@@ -35,6 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   http: ^1.5.0
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
+  qr_flutter: ^4.1.0
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
@@ -59,8 +63,13 @@ flutter:
   uses-material-design: true
 
   assets:
-   - assets/google_icon.webp
    - assets/restaurant.jpg
+   - assets/cha.jpg
+   - assets/Kaw.jpg
+   - assets/kra.jpg
+   - assets/Suki.jpg
+   - assets/pud.jpg
+   - assets/menu/
 
 
   # To add assets to your application, add an assets section, like this:

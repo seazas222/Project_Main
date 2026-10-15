@@ -41,10 +41,9 @@ class FoodCard extends StatelessWidget {
               child: SizedBox(
                 height: 140,
                 width: double.infinity,
-                child: Image.asset(
-                  food.imageAsset,
-                  fit: BoxFit.cover,
-                ),
+                child: food.imageUrl != null
+                    ? Image.network(food.imageUrl!, fit: BoxFit.cover, errorBuilder: (_, _, _) => Image.asset(food.imageAsset, fit: BoxFit.cover))
+                    : Image.asset(food.imageAsset, fit: BoxFit.cover),
               ),
             ),
             Padding(
@@ -64,22 +63,9 @@ class FoodCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.star,
-                        size: 14,
-                        color: Color(0xFFFFC400),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        food.rating.toString(),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
-                      ),
                       const Spacer(),
                       Text(
-                        food.price,
+                        food.startingPrice,
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.orange,

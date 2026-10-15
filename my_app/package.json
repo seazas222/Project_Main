@@ -6,15 +6,22 @@
   "author": "",
   "type": "commonjs",
   "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "test": "node --test",
+    "start": "node --env-file=.env server.js",
+    "create-admin": "node --env-file=.env scripts/create_admin.js",
+    "seed-common-menus": "node --env-file=.env scripts/seed_common_menus.js",
+    "install-menu-photos": "node --env-file=.env scripts/install_menu_photos.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "body-parser": "^2.3.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "firebase-admin": "^14.5.0",
     "mysql2": "^3.23.2"
   }
 }

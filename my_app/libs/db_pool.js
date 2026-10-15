@@ -1,15 +1,17 @@
 const mysql = require('mysql2/promise');
 
 const pool = mysql.createPool({
-    host: '127.0.0.1',
-    port: 3307,
-    user: 'root',
-    password: '',
-    database: 'restaurant_db',
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: Number(process.env.DB_PORT || 3307),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'restaurant_db',
 
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    timezone: '+07:00',
+    dateStrings: true
 });
 
 module.exports = pool;

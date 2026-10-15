@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/app_theme.dart';
@@ -5,44 +7,84 @@ import '../services/api_service.dart';
 import '../services/current_user_service.dart';
 import '../models/reservation.dart';
 
+import 'food_menu_page.dart';
+import 'order_history_page.dart';
 import 'reservation_page.dart';
-import 'payment_page.dart';
 
 class BookingPage extends StatefulWidget {
-  const BookingPage({super.key});
+  const BookingPage({
+    super.key,
+    this.isActive = true,
+  });
+
+  final bool isActive;
 
   @override
-  State<BookingPage> createState() => _BookingPageState();
+  State<BookingPage> createState() =>
+      _BookingPageState();
 }
 
-class _BookingPageState extends State<BookingPage> {
+class _BookingPageState extends State<BookingPage> with WidgetsBindingObserver {
+  Timer? _refreshTimer;
+  int _requestId = 0;
+  final Set<int> _cancellingIds = <int>{};
   List<Reservation> reservations = [];
+
   bool isLoading = true;
+
   String? errorMessage;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadReservations();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (widget.isActive) _loadReservations();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant BookingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _loadReservations();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.isActive) _loadReservations();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _loadReservations() async {
-    final user = CurrentUserService.instance.user;
+    final requestId = ++_requestId;
+    final user =
+        CurrentUserService.instance.user;
 
     if (user == null) {
+      if (!mounted || requestId != _requestId) return;
+
       setState(() {
         isLoading = false;
         errorMessage = 'กรุณาเข้าสู่ระบบก่อน';
       });
+
       return;
     }
 
     try {
-      final result = await ApiService.getReservationsByUserId(
+      final result =
+          await ApiService.getReservationsByUserId(
         user.userId,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
 
       setState(() {
         reservations = result;
@@ -50,30 +92,56 @@ class _BookingPageState extends State<BookingPage> {
         errorMessage = null;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
 
       setState(() {
         isLoading = false;
-        errorMessage = e.toString().replaceFirst(
-          'Exception: ',
-          '',
-        );
+        errorMessage = e
+            .toString()
+            .replaceFirst(
+              'Exception: ',
+              '',
+            );
       });
+    }
+  }
+
+  Future<void> _cancelReservation(int reservationId) async {
+    if (_cancellingIds.contains(reservationId)) return;
+    setState(() => _cancellingIds.add(reservationId));
+    try {
+      await ApiService.cancelReservation(reservationId);
+      if (!mounted) return;
+      setState(() {
+        reservations.removeWhere((item) => item.reservationId == reservationId);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ยกเลิกการจองแล้ว ดูรายละเอียดได้ในประวัติการจอง')),
+      );
+      await _loadReservations();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _cancellingIds.remove(reservationId));
     }
   }
 
   String _statusText(int statusId) {
     switch (statusId) {
       case 1:
-        return 'Confirmed';
+        return 'ยืนยันแล้ว';
       case 2:
-        return 'Pending';
+        return 'ยกเลิก';
       case 3:
-        return 'Cancelled';
+        return 'มาใช้บริการแล้ว';
       case 4:
-        return 'Completed';
+        return 'รอยืนยัน';
       default:
-        return 'Unknown';
+        return 'ไม่ทราบสถานะ';
     }
   }
 
@@ -82,11 +150,11 @@ class _BookingPageState extends State<BookingPage> {
       case 1:
         return AppColors.success;
       case 2:
-        return Colors.orange;
-      case 3:
         return AppColors.danger;
-      case 4:
+      case 3:
         return Colors.blue;
+      case 4:
+        return Colors.orange;
       default:
         return AppColors.grey;
     }
@@ -97,11 +165,11 @@ class _BookingPageState extends State<BookingPage> {
       case 1:
         return const Color(0xFFE7F7EF);
       case 2:
-        return const Color(0xFFFFF3E0);
-      case 3:
         return const Color(0xFFFFEBEE);
-      case 4:
+      case 3:
         return const Color(0xFFE3F2FD);
+      case 4:
+        return const Color(0xFFFFF3E0);
       default:
         return const Color(0xFFF2F2F2);
     }
@@ -115,7 +183,8 @@ class _BookingPageState extends State<BookingPage> {
         child: RefreshIndicator(
           onRefresh: _loadReservations,
           child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics:
+                const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(
               20,
               20,
@@ -124,30 +193,28 @@ class _BookingPageState extends State<BookingPage> {
             ),
             children: [
               const Text(
-                'My Booking',
+                'การจองของฉัน',
                 style: TextStyle(
                   fontSize: 27,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-
               const SizedBox(height: 4),
-
               const Text(
-                'Manage your reservation and order',
+                'จัดการการจองโต๊ะและรายการอาหารของคุณ',
                 style: TextStyle(
                   color: AppColors.grey,
                   fontSize: 12,
                 ),
               ),
-
               const SizedBox(height: 20),
-
               if (isLoading)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),
                   child: Center(
-                    child: CircularProgressIndicator(),
+                    child: CircularProgressIndicator(
+                      color: AppColors.orange,
+                    ),
                   ),
                 )
               else if (errorMessage != null)
@@ -157,10 +224,13 @@ class _BookingPageState extends State<BookingPage> {
               else
                 ...reservations.map(
                   (reservation) => Padding(
-                    padding: const EdgeInsets.only(
+                    padding:
+                        const EdgeInsets.only(
                       bottom: 14,
                     ),
-                    child: _bookingCard(reservation),
+                    child: _bookingCard(
+                      reservation,
+                    ),
                   ),
                 ),
             ],
@@ -170,7 +240,12 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
-  Widget _bookingCard(Reservation reservation) {
+  Widget _bookingCard(
+    Reservation reservation,
+  ) {
+    final tableNumber =
+        'T${(reservation.tableNumber ?? reservation.tableId).toString().padLeft(3, '0')}';
+
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
@@ -187,7 +262,8 @@ class _BookingPageState extends State<BookingPage> {
       child: Column(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius:
+                BorderRadius.circular(13),
             child: Image.asset(
               'assets/restaurant.jpg',
               height: 150,
@@ -195,11 +271,10 @@ class _BookingPageState extends State<BookingPage> {
               fit: BoxFit.cover,
             ),
           ),
-
           const SizedBox(height: 14),
-
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -207,15 +282,14 @@ class _BookingPageState extends State<BookingPage> {
                       CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Table T${reservation.tableId.toString().padLeft(3, '0')}',
+                      'โต๊ะ $tableNumber',
                       style: const TextStyle(
                         fontSize: 17,
-                        fontWeight: FontWeight.w600,
+                        fontWeight:
+                            FontWeight.w600,
                       ),
                     ),
-
                     const SizedBox(height: 5),
-
                     Text(
                       '${reservation.diningDate} • ${reservation.diningTime}',
                       style: const TextStyle(
@@ -223,9 +297,8 @@ class _BookingPageState extends State<BookingPage> {
                         fontSize: 12,
                       ),
                     ),
-
                     Text(
-                      '${reservation.guests} persons',
+                      '${reservation.guests} คน',
                       style: const TextStyle(
                         color: AppColors.grey,
                         fontSize: 12,
@@ -234,100 +307,96 @@ class _BookingPageState extends State<BookingPage> {
                   ],
                 ),
               ),
-
               Container(
-                padding: const EdgeInsets.symmetric(
+                padding:
+                    const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: _statusBackground(
-                    reservation.statusReservationId,
+                    reservation
+                        .statusReservationId,
                   ),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius:
+                      BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _statusText(
-                    reservation.statusReservationId,
-                  ),
+                      reservation.statusReservationName ?? _statusText(reservation.statusReservationId),
                   style: TextStyle(
                     color: _statusColor(
-                      reservation.statusReservationId,
+                      reservation
+                          .statusReservationId,
                     ),
                     fontSize: 11,
+                    fontWeight:
+                        FontWeight.w500,
                   ),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           _action(
             context,
-            Icons.receipt_long_outlined,
-            'Your Order',
-            'Review food you pre-ordered',
-            () {},
-          ),
-
-          const SizedBox(height: 10),
-
-          _action(
-            context,
-            Icons.payments_outlined,
-            'Payment',
-            'View payment details',
+            Icons.restaurant_menu_outlined,
+            'สั่งอาหาร',
+            'เลือกอาหารสำหรับโต๊ะนี้',
             () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const PaymentPage(
-                    amount: 10.00,
+                  builder: (_) => FoodMenuPage(
+                    reservationId:
+                        reservation.reservationId,
+                    reservationTable:
+                        tableNumber,
                   ),
                 ),
               );
             },
           ),
-
           const SizedBox(height: 10),
-
           _action(
             context,
-            Icons.edit_calendar_outlined,
-            'Modify reservation',
-            'Change date, time or table',
+            Icons.payments_outlined,
+            'ออร์เดอร์และการชำระเงิน',
+            'ดูรายการอาหารและ QR เมื่ออาหารทำเสร็จ',
             () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const ReservationPage(),
+                  builder: (_) => const OrderHistoryPage(),
                 ),
               );
             },
           ),
-
           const SizedBox(height: 18),
-
           OutlinedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Booking cancelled'),
-                ),
-              );
-            },
+            onPressed: reservation.statusReservationId == 2 ||
+                    reservation.statusReservationId == 3 ||
+                    _cancellingIds.contains(reservation.reservationId)
+                ? null
+                : () => _cancelReservation(reservation.reservationId),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.danger,
+              foregroundColor:
+                  AppColors.danger,
               side: const BorderSide(
                 color: AppColors.danger,
               ),
-              minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+              minimumSize:
+                  const Size.fromHeight(48),
+              shape:
+                  RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(14),
               ),
             ),
-            child: const Text('Cancel Booking'),
+            child: Text(
+              _cancellingIds.contains(reservation.reservationId)
+                  ? 'กำลังยกเลิก...'
+                  : reservation.statusReservationId == 2 ? 'ยกเลิกแล้ว' : 'ยกเลิกการจอง',
+            ),
           ),
         ],
       ),
@@ -342,33 +411,47 @@ class _BookingPageState extends State<BookingPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Icon(
+          const Icon(
             Icons.event_busy_outlined,
             size: 55,
             color: AppColors.grey,
           ),
-
-          SizedBox(height: 15),
-
-          Text(
-            'No bookings yet',
+          const SizedBox(height: 15),
+          const Text(
+            'ยังไม่มีการจอง',
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w600,
             ),
           ),
-
-          SizedBox(height: 6),
-
-          Text(
-            'Your reservations will appear here.',
+          const SizedBox(height: 6),
+          const Text(
+            'รายการจองโต๊ะของคุณจะแสดงที่นี่',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.grey,
               fontSize: 12,
             ),
+          ),
+          const SizedBox(height: 18),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const ReservationPage(),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  AppColors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('จองโต๊ะ'),
           ),
         ],
       ),
@@ -390,9 +473,7 @@ class _BookingPageState extends State<BookingPage> {
             size: 50,
             color: AppColors.danger,
           ),
-
           const SizedBox(height: 12),
-
           const Text(
             'ไม่สามารถโหลดข้อมูลการจองได้',
             style: TextStyle(
@@ -400,9 +481,7 @@ class _BookingPageState extends State<BookingPage> {
               fontWeight: FontWeight.w600,
             ),
           ),
-
           const SizedBox(height: 6),
-
           Text(
             errorMessage ?? '',
             textAlign: TextAlign.center,
@@ -411,12 +490,12 @@ class _BookingPageState extends State<BookingPage> {
               fontSize: 11,
             ),
           ),
-
           const SizedBox(height: 15),
-
           OutlinedButton(
             onPressed: _loadReservations,
-            child: const Text('ลองอีกครั้ง'),
+            child: const Text(
+              'ลองอีกครั้ง',
+            ),
           ),
         ],
       ),
@@ -437,7 +516,11 @@ class _BookingPageState extends State<BookingPage> {
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius:
+              BorderRadius.circular(15),
+          border: Border.all(
+            color: AppColors.border,
+          ),
         ),
         child: Row(
           children: [
@@ -445,17 +528,17 @@ class _BookingPageState extends State<BookingPage> {
               width: 45,
               height: 45,
               decoration: BoxDecoration(
-                color: AppColors.orangeLight,
-                borderRadius: BorderRadius.circular(13),
+                color:
+                    AppColors.orangeLight,
+                borderRadius:
+                    BorderRadius.circular(13),
               ),
               child: Icon(
                 icon,
                 color: AppColors.orange,
               ),
             ),
-
             const SizedBox(width: 12),
-
             Expanded(
               child: Column(
                 crossAxisAlignment:
@@ -464,12 +547,11 @@ class _BookingPageState extends State<BookingPage> {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w500,
+                      fontWeight:
+                          FontWeight.w500,
                     ),
                   ),
-
                   const SizedBox(height: 3),
-
                   Text(
                     subtitle,
                     style: const TextStyle(
@@ -480,8 +562,9 @@ class _BookingPageState extends State<BookingPage> {
                 ],
               ),
             ),
-
-            const Icon(Icons.chevron_right),
+            const Icon(
+              Icons.chevron_right,
+            ),
           ],
         ),
       ),

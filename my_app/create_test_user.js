@@ -13,7 +13,6 @@ async function createTestUser() {
         const phone = '0812345678';
         const email = 'customer01@gmail.com';
 
-        // เข้ารหัส Password ก่อนเก็บลง Database
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const sql = `

@@ -16,10 +16,8 @@ async function createCustomer() {
         const email = 'customer01@gmail.com';
         const roleId = 2;
 
-        // แปลง Password เป็น Hash
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // ตรวจ Username ซ้ำ
         const [existingUser] = await conn.query(
             'SELECT user_id FROM user WHERE username = ?',
             [username]
@@ -30,7 +28,6 @@ async function createCustomer() {
             return;
         }
 
-        // เพิ่ม Customer
         const sql = `
             INSERT INTO user
             (
